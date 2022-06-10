@@ -1,0 +1,38 @@
+name: Go
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.18
+
+    - name: Build
+      run: go build -v ./...
+
+    - name: Test
+      run: go test -v ./...
+      
+    - name: OpenFaaS build and push
+      uses: mrsimpson/action-openfaas-build@0.3.0
+      with:
+        stack-file: pdftoxml.yml
+        docker-username: ${{ secrets.DOCKER_USERNAME }}
+        docker-password: ${{ secrets.DOCKER_PASSWORD }}
+        deploy: true
+        openfaas-gateway: ${{ secrets.OPENFAAS_GATEWAY }}
+        openfaas-username: ${{ secrets.OPENFAAS_USERNAME }}
+        openfaas-password: ${{ secrets.OPENFAAS_PASSWORD }}
+        
+

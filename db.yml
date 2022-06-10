@@ -1,0 +1,10 @@
+version: 1.0
+provider:
+  name: openfaas
+  gateway: https://gateway-1.cyberimmersion.net
+functions:
+  db:
+    lang: golang-http
+    handler: ./
+    image: registry.cyberimmersion.net/db:latest
+
