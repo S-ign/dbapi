@@ -6,5 +6,5 @@ functions:
   db:
     lang: golang-http
     handler: ./
-    image: registry.cyberimmersion.net/db:latest
+    image: m0t0k0/functions:dbapi-latest
 

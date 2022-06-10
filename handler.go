@@ -1746,6 +1746,7 @@ func Handle(req handler.Request) (handler.Response, error) {
 			return stringResponse("success!")
 			//...........................................
 
+		// TODO: test
 		case strings.ToLower(d.Table) == "shopping_carts":
 			shoppingCartID := d.Delete.Values
 			if err != nil {
