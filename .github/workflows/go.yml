@@ -27,7 +27,7 @@ jobs:
     - name: OpenFaaS build and push
       uses: mrsimpson/action-openfaas-build@0.3.0
       with:
-        stack-file: pdftoxml.yml
+        stack-file: db.yml
         docker-username: ${{ secrets.DOCKER_USERNAME }}
         docker-password: ${{ secrets.DOCKER_PASSWORD }}
         deploy: true
