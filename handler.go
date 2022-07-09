@@ -1325,7 +1325,7 @@ func errResponse(err error) (handler.Response, error) {
 		StatusCode: http.StatusOK,
 		Header: map[string][]string{
 			"Access-Control-Allow-Origin":  {"*"},
-			"Access-Control-Allow-Methods": {"GET", "POST"},
+			"Access-Control-Allow-Methods": {"*"},
 			"Access-Control-Allow-Headers": {"*"},
 			"Content-Type":                 {"application/json"},
 		},
@@ -1339,7 +1339,7 @@ func structResponse(i interface{}) (handler.Response, error) {
 		StatusCode: http.StatusOK,
 		Header: map[string][]string{
 			"Access-Control-Allow-Origin":  {"*"},
-			"Access-Control-Allow-Methods": {"GET", "POST"},
+			"Access-Control-Allow-Methods": {"*"},
 			"Access-Control-Allow-Headers": {"*"},
 			"Content-Type":                 {"application/json"},
 		},
@@ -1352,7 +1352,7 @@ func stringResponse(s string) (handler.Response, error) {
 		StatusCode: http.StatusOK,
 		Header: map[string][]string{
 			"Access-Control-Allow-Origin":  {"*"},
-			"Access-Control-Allow-Methods": {"GET", "POST"},
+			"Access-Control-Allow-Methods": {"*"},
 			"Access-Control-Allow-Headers": {"*"},
 			"Content-Type":                 {"application/json"},
 		},
