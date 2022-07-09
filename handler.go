@@ -22,6 +22,217 @@ type Creater interface {
 	create(db *pgx.Conn, table string) error
 }
 
+type registrationDetail struct {
+	Name    string   `json:"name"`
+	Phone   string   `json:"phone"`
+	Members []string `json:"members"`
+	Shirt   []string `json:"shirt"`
+	Club    []string `json:"club"`
+}
+
+func getRegistrationDetail(db *pgx.Conn) ([]registrationDetail, error) {
+	var rd registrationDetail
+	var rdList []registrationDetail
+	exec := fmt.Sprintf(`
+	select c.name, c.phone, t.members, t.shirt, t1.club
+	from customer c
+	inner join salesorder s on
+	s.customerId = c.customerId
+	inner join (
+			select s.salesorderid, string_agg(p.name, '\n' order by p.name) as members,
+					string_agg(oi.name, '\n' order by p.name) as shirt
+			from participant p
+			inner join purchase pu
+			on pu.purchaseId = p.purchaseId
+			inner join salesorder s 
+			on s.salesorderId = pu.salesorderid
+			inner join participant_option po 
+	on po.participantId = p.participantId
+	inner join option_item oi
+	on oi.optionItemsId = po.optionItemsId 
+	inner join category_option co
+	on co.categoryOptionsId = oi.categoryOptionsId
+	and co.name = 'T-Shirt'
+	group by s.salesorderid
+	) t
+	on t.salesorderId = s.salesorderId
+	inner join (
+			select s.salesorderid, string_agg(p.name, '\n' order by p.name) as members,
+					string_agg(oi.name, '\n' order by p.name) as club
+			from participant p
+			inner join purchase pu
+			on pu.purchaseId = p.purchaseId
+			inner join salesorder s 
+			on s.salesorderId = pu.salesorderid
+			inner join participant_option po 
+	on po.participantId = p.participantId
+	inner join option_item oi
+	on oi.optionItemsId = po.optionItemsId 
+	inner join category_option co
+	on co.categoryOptionsId = oi.categoryOptionsId
+	and co.name = 'Dexterity'
+	group by s.salesorderid
+	) t1
+	on t1.salesorderId = s.salesorderId
+	`)
+	rows, err := db.Query(context.Background(), exec)
+	if err != nil {
+		return nil, fmt.Errorf("getRegistrationDetail query err: %v", err)
+	}
+	for rows.Next() {
+		var members string
+		var shirt string
+		var club string
+		rows.Scan(&rd.Name, &rd.Phone, &members, &shirt, &club)
+		if err != nil {
+			return nil, fmt.Errorf("getRegistrationDetail scan err: %v", err)
+		}
+		rd.Members = strings.Split(members, "\\n")
+		rd.Shirt = strings.Split(shirt, "\\n")
+		rd.Club = strings.Split(club, "\\n")
+		rdList = append(rdList, rd)
+	}
+
+	return rdList, nil
+}
+
+type registrationBreakdown struct {
+	SoloRegistration     int    `json:"soloregistration"`
+	SoloCollected        string `json:"solocollected"`
+	TwosomeRegistration  int    `json:"twosomeregistration"`
+	TwosomeCollected     string `json:"twosomecollected"`
+	FoursomeRegistration int    `json:"foursomeregistration"`
+	FoursomeCollected    string `json:"foursomecollected"`
+}
+
+func (rb *registrationBreakdown) getRegistrationBreakdown(db *pgx.Conn) error {
+	exec := fmt.Sprintf(`
+	select
+	sum(case when productName = 'Solo Registration' then qty else 0 end) as "Solo Registration",
+	sum(case when productName = 'Solo Registration' then price else cast(0 as money) end) as "Solo Collected",
+	sum(case when productName = 'Twosome Registration' then qty else 0 end) as "Twosome Registration",
+	sum(case when productName = 'Twosome Registration' then price else cast(0 as money) end) as "Twosome Collected",
+	sum(case when productName = 'Foursome Registration' then qty else 0 end) as "Foursome Registration",
+	sum(case when productName = 'Solo Registration' then price else cast(0 as money) end) as "Foursome Collected"
+	from participant pa
+	inner join purchase pu on
+	pa.purchaseId = pu.purchaseId
+	`)
+	row := db.QueryRow(context.Background(), exec)
+	err := row.Scan(
+		&rb.SoloRegistration, &rb.SoloCollected,
+		&rb.TwosomeRegistration, &rb.TwosomeCollected,
+		&rb.FoursomeRegistration, &rb.FoursomeCollected,
+	)
+	if err != nil {
+		return fmt.Errorf("getRegistrationBreakdown scan err: %v", err)
+	}
+
+	return nil
+}
+
+type dashboardSummary struct {
+	Participants int    `json:"participants"`
+	Collected    string `json:"collected"`
+}
+
+func (ds *dashboardSummary) getDashboardSummary(db *pgx.Conn) error {
+	// Overall Summary
+	exec := fmt.Sprintf(`
+	select count(qty) as Participants, sum(price) as Collected
+	from participant pa
+	inner join purchase pu on
+	pa.purchaseId = pu.purchaseId
+	`)
+	row := db.QueryRow(context.Background(), exec)
+	err := row.Scan(&ds.Participants, &ds.Collected)
+	if err != nil {
+		return fmt.Errorf("getDashboardSummary scan err: %v", err)
+	}
+
+	return nil
+}
+
+type registrationSummary struct {
+	SoloRegistration     int `json:"soloregistration"`
+	TwosomeRegistration  int `json:"twosomeregistration"`
+	FoursomeRegistration int `json:"foursomeregistration"`
+}
+
+func (rs *registrationSummary) getRegistrationSummary(db *pgx.Conn) error {
+	// Registration Summary
+	exec := fmt.Sprintf(`
+	select
+	sum(case when productName = 'Solo Registration' then qty else 0 end) as "Solo Registration",
+	sum(case when productName = 'Twosome Registration' then qty else 0 end) as "Twosome Registration",
+	sum(case when productName = 'Foursome Registration' then qty else 0 end) as "Foursome Registration"
+	from participant pa
+	inner join purchase pu on
+	pa.purchaseId = pu.purchaseId
+	`)
+	row := db.QueryRow(context.Background(), exec)
+	err := row.Scan(&rs.SoloRegistration, &rs.TwosomeRegistration, &rs.FoursomeRegistration)
+	if err != nil {
+		return fmt.Errorf("getRegistrationSummary scan err: %v", err)
+	}
+
+	return nil
+}
+
+type shirtSummary struct {
+	Small   int `json:"small"`
+	Medium  int `json:"medium"`
+	Large   int `json:"large"`
+	XLarge  int `json:"xlarge"`
+	XXLarge int `json:"xxlarge"`
+}
+
+func (ss *shirtSummary) getShirtSummary(db *pgx.Conn) error {
+	// Shirt Summary
+	exec := fmt.Sprintf(`
+	select
+	count(case when Name = 'SMALL' then 1 end) as "SMALL",
+	count(case when Name = 'MEDIUM' then 1 end) as "MEDIUM",
+	count(case when Name = 'LARGE' then 1 end) as "LARGE",
+	count(case when Name = 'X-LARGE' then 1 end) as "X-LARGE",
+	count(case when Name = '2X-LARGE' then 1 end) as "2X-LARGE"
+	from participant_option po
+	inner join option_item oi
+	on oi.optionitemsid = po.optionitemsid
+	`)
+	row := db.QueryRow(context.Background(), exec)
+	err := row.Scan(&ss.Small, &ss.Medium, &ss.Large, &ss.XLarge, &ss.XXLarge)
+	if err != nil {
+		return fmt.Errorf("getShirtSummary scan err: %v", err)
+	}
+
+	return nil
+}
+
+type clubSummary struct {
+	LeftHanded  int `json:"lefthanded"`
+	RightHanded int `json:"righthanded"`
+}
+
+func (cs *clubSummary) getClubSummary(db *pgx.Conn) error {
+	// Club Summary
+	exec := fmt.Sprintf(`
+	select
+	count(case when Name = 'LEFT-HANDED' then 1 end) as "LEFT-HANDED",
+	count(case when Name = 'RIGHT-HANDED' then 1 end) as "RIGHT-HANDED"
+	from participant_option po
+	inner join option_item oi
+	on oi.optionitemsid = po.optionitemsid
+	`)
+	row := db.QueryRow(context.Background(), exec)
+	err := row.Scan(&cs.LeftHanded, &cs.RightHanded)
+	if err != nil {
+		return fmt.Errorf("getClubSummary scan err: %v", err)
+	}
+
+	return nil
+}
+
 type golfer struct {
 	Name      string `json:"name"`
 	ShirtSize string `json:"shirtsize"`
@@ -1111,7 +1322,13 @@ func getSecrets() (user, pass, addr, name []byte, err error) {
 func errResponse(err error) (handler.Response, error) {
 	return handler.Response{
 		Body:       []byte(err.Error()),
-		StatusCode: http.StatusBadRequest,
+		StatusCode: http.StatusOK,
+		Header: map[string][]string{
+			"Access-Control-Allow-Origin":  {"*"},
+			"Access-Control-Allow-Methods": {"GET", "POST"},
+			"Access-Control-Allow-Headers": {"Content-Type"},
+			"Content-Type":                 {"application/json"},
+		},
 	}, err
 }
 
@@ -1120,6 +1337,12 @@ func structResponse(i interface{}) (handler.Response, error) {
 	return handler.Response{
 		Body:       resp,
 		StatusCode: http.StatusOK,
+		Header: map[string][]string{
+			"Access-Control-Allow-Origin":  {"*"},
+			"Access-Control-Allow-Methods": {"GET", "POST"},
+			"Access-Control-Allow-Headers": {"Content-Type"},
+			"Content-Type":                 {"application/json"},
+		},
 	}, err
 }
 
@@ -1127,6 +1350,12 @@ func stringResponse(s string) (handler.Response, error) {
 	return handler.Response{
 		Body:       []byte(s),
 		StatusCode: http.StatusOK,
+		Header: map[string][]string{
+			"Access-Control-Allow-Origin":  {"*"},
+			"Access-Control-Allow-Methods": {"GET", "POST"},
+			"Access-Control-Allow-Headers": {"Content-Type"},
+			"Content-Type":                 {"application/json"},
+		},
 	}, nil
 }
 
@@ -1248,6 +1477,158 @@ func deleteShoppingCart(db *pgx.Conn, shoppingcartid string) error {
 	return err
 }
 
+type migrate_data struct {
+	ShoppingOrderID string `json:"shoppingorderid"`
+	CustomerID      string `json:"customerid"`
+	PaymentID       string `json:"paymentid"`
+	Name            string `json:"name"`
+	Email           string `json:"email"`
+	Phone           string `json:"phone"`
+}
+
+func migrateData(db *pgx.Conn, md migrate_data) error {
+	var customerID int
+	exec := fmt.Sprintf(`
+	insert into
+    customer (organizationid, name, email, phone)
+		values ($1, $2, $3, $4) returning customerid`)
+	err := db.QueryRow(context.Background(), exec, "aa9a52a7-ab83-46ff-ab15-b35bd868407f", md.Name, md.Email, md.Phone).Scan(&customerID)
+	if err != nil {
+		return fmt.Errorf("Customer: %v", err.Error())
+	}
+
+	exec = fmt.Sprintf(`
+	insert into
+    salesorder (salesorderid, customerid, orderdate, paymentid, invoiceno)
+	select
+    so.shoppingorderid,
+    $1,
+    so.orderdate,
+    $2,
+		$3
+	from
+    shopping_order so
+	where
+    so.shoppingorderid = $4`)
+	_, err = db.Exec(context.Background(), exec, customerID, md.PaymentID, "none", md.ShoppingOrderID)
+	if err != nil {
+		return fmt.Errorf("salesorder: %v", err.Error())
+	}
+
+	exec = fmt.Sprintf(`
+	insert into
+					purchase (
+					purchaseid,
+					salesorderid,
+					qty,
+					productname,
+					description,
+					price
+			)
+	select
+			sc.shoppingcartid,
+			so.shoppingorderid,
+			sc.qty,
+			pr.description,
+			pr.description,
+			p.price
+	from
+			shopping_cart sc
+			inner join pricing p on sc.pricingid = p.pricingid
+			inner join product pr on p.productid = pr.productid
+			inner join shopping_order so on sc.shoppingorderid = so.shoppingorderid
+	and so.shoppingorderid = $1`)
+	_, err = db.Exec(context.Background(), exec, md.ShoppingOrderID)
+	if err != nil {
+		return fmt.Errorf("purchase: %v", err.Error())
+	}
+
+	exec = fmt.Sprintf(`
+	insert into
+			participant (participantid, purchaseid, name)
+	select
+			cp.cartparticipantid,
+			sc.shoppingcartid,
+			cp.name
+	from
+			cart_participant cp
+			inner join shopping_cart sc on cp.shoppingcartid = sc.shoppingcartid
+			inner join shopping_order so on so.shoppingorderid = sc.shoppingorderid
+	where
+			so.shoppingorderid = $1
+	`)
+	_, err = db.Exec(context.Background(), exec, md.ShoppingOrderID)
+	if err != nil {
+		return fmt.Errorf("participant: %v", err.Error())
+	}
+
+	exec = fmt.Sprintf(`
+	insert into
+			participant_option (
+					participantoptionsid,
+					participantid,
+					optionitemsid
+			)
+	select
+			cpo.cartparticipantoptionsid,
+			cpo.cartparticipantid,
+			cpo.optionitemsid
+	from
+			cart_participant_option cpo
+			inner join cart_participant cp on cp.cartparticipantid = cpo.cartparticipantid
+			inner join shopping_cart sc on cp.shoppingcartid = sc.shoppingcartid
+			inner join shopping_order so on sc.shoppingorderid = so.shoppingorderid
+	where
+			so.shoppingorderid = $1
+	`)
+	_, err = db.Exec(context.Background(), exec, md.ShoppingOrderID)
+	if err != nil {
+		return fmt.Errorf("participant_option: %v", err.Error())
+	}
+
+	exec = fmt.Sprintf(`
+	delete from cart_participant_option 
+	where cartparticipantid in (
+			select cartparticipantid 
+			from cart_participant cp
+			inner join shopping_cart sc on sc.shoppingcartid = cp.shoppingcartid
+			where sc.shoppingorderid = $1)`)
+	_, err = db.Exec(context.Background(), exec, md.ShoppingOrderID)
+	if err != nil {
+		return fmt.Errorf("deleting cart_participant_option: %v", err.Error())
+	}
+
+	exec = fmt.Sprintf(`
+	delete from cart_participant
+	where shoppingcartid in (
+			select shoppingcartid 
+			from shopping_cart
+			where shoppingorderid = $1)`)
+	_, err = db.Exec(context.Background(), exec, md.ShoppingOrderID)
+	if err != nil {
+		return fmt.Errorf("deleting cart_participant: %v", err.Error())
+	}
+
+	exec = fmt.Sprintf(`
+	delete from shopping_cart 
+	where shoppingorderid = $1`)
+	_, err = db.Exec(context.Background(), exec, md.ShoppingOrderID)
+	if err != nil {
+		return fmt.Errorf("deleting shopping_cart: %v", err.Error())
+	}
+
+	exec = fmt.Sprintf(`
+	delete from shopping_order
+	where shoppingorderid = $1
+	`)
+	_, err = db.Exec(context.Background(), exec, md.ShoppingOrderID)
+	if err != nil {
+		return fmt.Errorf("deleting orderid: %v", err.Error())
+	}
+
+	return nil
+}
+
 // Handle a function invocation
 func Handle(req handler.Request) (handler.Response, error) {
 	// validate request api key
@@ -1367,6 +1748,19 @@ func Handle(req handler.Request) (handler.Response, error) {
 				return errResponse(err)
 			}
 			err = c.create(db, d.Table)
+			if err != nil {
+				return errResponse(err)
+			}
+			return stringResponse("success!")
+			//............................................
+
+		case strings.ToLower(d.Table) == "migrate_data":
+			var m migrate_data
+			err := json.Unmarshal(d.Create, &m)
+			if err != nil {
+				return errResponse(err)
+			}
+			err = migrateData(db, m)
 			if err != nil {
 				return errResponse(err)
 			}
@@ -1509,6 +1903,58 @@ func Handle(req handler.Request) (handler.Response, error) {
 			return structResponse(ol)
 			//............................................
 
+		case strings.ToLower(d.Table) == "dashboard_summary":
+			var ds dashboardSummary
+			err := ds.getDashboardSummary(db)
+			if err != nil {
+				return errResponse(err)
+			}
+			return structResponse(ds)
+			//............................................
+
+		case strings.ToLower(d.Table) == "registration_summary":
+			var rs registrationSummary
+			err := rs.getRegistrationSummary(db)
+			if err != nil {
+				return errResponse(err)
+			}
+			return structResponse(rs)
+			//............................................
+
+		case strings.ToLower(d.Table) == "shirt_summary":
+			var ss shirtSummary
+			err := ss.getShirtSummary(db)
+			if err != nil {
+				return errResponse(err)
+			}
+			return structResponse(ss)
+			//............................................
+
+		case strings.ToLower(d.Table) == "club_summary":
+			var cs clubSummary
+			err := cs.getClubSummary(db)
+			if err != nil {
+				return errResponse(err)
+			}
+			return structResponse(cs)
+			//............................................
+
+		case strings.ToLower(d.Table) == "registration_breakdown":
+			var rb registrationBreakdown
+			err := rb.getRegistrationBreakdown(db)
+			if err != nil {
+				return errResponse(err)
+			}
+			return structResponse(rb)
+			//............................................
+
+		case strings.ToLower(d.Table) == "registration_detail":
+			rdList, err := getRegistrationDetail(db)
+			if err != nil {
+				return errResponse(err)
+			}
+			return structResponse(rdList)
+			//............................................
 		}
 
 	// READALL
