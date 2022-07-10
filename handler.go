@@ -33,6 +33,7 @@ type registrationDetail struct {
 func getRegistrationDetail(db *pgx.Conn) ([]registrationDetail, error) {
 	var rd registrationDetail
 	var rdList []registrationDetail
+	//query 10:42
 	exec := fmt.Sprintf(`
 	select c.name, c.phone, t.members, t.shirt, t1.club
 	from customer c
@@ -56,7 +57,7 @@ func getRegistrationDetail(db *pgx.Conn) ([]registrationDetail, error) {
 	group by s.salesorderid
 	) t
 	on t.salesorderId = s.salesorderId
-	inner join (
+	left join (
 			select s.salesorderid, string_agg(p.name, '\n' order by p.name) as members,
 					string_agg(oi.name, '\n' order by p.name) as club
 			from participant p
