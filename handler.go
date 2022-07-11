@@ -33,9 +33,8 @@ type registrationDetail struct {
 func getRegistrationDetail(db *pgx.Conn) ([]registrationDetail, error) {
 	var rd registrationDetail
 	var rdList []registrationDetail
-	//query 10:42
-	exec := fmt.Sprintf(`
-	select c.name, c.phone, t.members, t.shirt, t1.club
+	//query 1043
+	exec := fmt.Sprintf(`select c.name, c.phone, t.members, t.shirt, t1.club
 	from customer c
 	inner join salesorder s on
 	s.customerId = c.customerId
@@ -74,8 +73,7 @@ func getRegistrationDetail(db *pgx.Conn) ([]registrationDetail, error) {
 	and co.name = 'Dexterity'
 	group by s.salesorderid
 	) t1
-	on t1.salesorderId = s.salesorderId
-	`)
+	on t1.salesorderId = s.salesorderId`)
 	rows, err := db.Query(context.Background(), exec)
 	if err != nil {
 		return nil, fmt.Errorf("getRegistrationDetail query err: %v", err)
@@ -1323,7 +1321,7 @@ func getSecrets() (user, pass, addr, name []byte, err error) {
 func errResponse(err error) (handler.Response, error) {
 	return handler.Response{
 		Body:       []byte(err.Error()),
-		StatusCode: http.StatusOK,
+		StatusCode: http.StatusBadRequest,
 		Header: map[string][]string{
 			"Access-Control-Allow-Origin":  {"*"},
 			"Access-Control-Allow-Methods": {"*"},
