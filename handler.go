@@ -23,17 +23,16 @@ type Creater interface {
 }
 
 type registrationDetail struct {
-	Name    string   `json:"name"`
-	Phone   string   `json:"phone"`
-	Members []string `json:"members"`
-	Shirt   []string `json:"shirt"`
-	Club    []string `json:"club"`
+	Name    string      `json:"name"`
+	Phone   string      `json:"phone"`
+	Members []string    `json:"members"`
+	Shirt   []string    `json:"shirt"`
+	Club    interface{} `json:"club"`
 }
 
 func getRegistrationDetail(db *pgx.Conn) ([]registrationDetail, error) {
 	var rd registrationDetail
 	var rdList []registrationDetail
-	//query 1043
 	exec := fmt.Sprintf(`select c.name, c.phone, t.members, t.shirt, t1.club
 	from customer c
 	inner join salesorder s on
@@ -78,20 +77,26 @@ func getRegistrationDetail(db *pgx.Conn) ([]registrationDetail, error) {
 	if err != nil {
 		return nil, fmt.Errorf("getRegistrationDetail query err: %v", err)
 	}
+	defer rows.Close()
 	for rows.Next() {
 		var members string
 		var shirt string
-		var club string
-		rows.Scan(&rd.Name, &rd.Phone, &members, &shirt, &club)
+		rows.Scan(&rd.Name, &rd.Phone, &members, &shirt, &rd.Club)
 		if err != nil {
 			return nil, fmt.Errorf("getRegistrationDetail scan err: %v", err)
 		}
 		rd.Members = strings.Split(members, "\\n")
 		rd.Shirt = strings.Split(shirt, "\\n")
-		rd.Club = strings.Split(club, "\\n")
-		rdList = append(rdList, rd)
-	}
+		switch club := rd.Club.(type) {
+		case nil:
+			rd.Club = []string{"none"}
+		case string:
+			rd.Club = strings.Split(club, "\\n")
+		}
 
+		rdList = append(rdList, rd)
+		fmt.Println(rows.Err())
+	}
 	return rdList, nil
 }
 
